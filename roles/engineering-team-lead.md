@@ -27,7 +27,6 @@ You enjoy working with others and helping mentor developers at all skill levels.
 
 <skills>
 One on Ones
-Writing Competencies
 Interviewing
 Leading
 Career Development
@@ -43,7 +42,7 @@ Fire Handling
 Fire Triaging
 </skills>
  
-<inherit doc="engineering-senior-developer.md"/>
+<inherit doc="engineering-developer-3.md"/>
 
 <searchspring-overview.snippet/>
 

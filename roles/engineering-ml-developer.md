@@ -25,9 +25,7 @@ You enjoy working with others and contribute to the company products. You always
 
 <skills>
 Coding
-Research
 Feature Flags
-GitHub
 Deployments
 SQL
 Testing
@@ -48,7 +46,7 @@ Part of Successful Projects:1
 1 of IDE
 </skills>
 
-<inherit doc="base.md"/>
+<inherit doc="engineering-base.md"/>
 
 <searchspring-overview.snippet/>
 

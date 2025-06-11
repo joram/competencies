@@ -10,13 +10,23 @@ import (
 	"github.com/russross/blackfriday"
 )
 
+type skillSet struct {
+	name   string
+	skills string
+}
+
 func main() {
 	files, err := ioutil.ReadDir("./roles")
 	if err != nil {
 		log.Fatal(err)
 	}
-	os.MkdirAll("docs", os.ModePerm)
+	if err := os.MkdirAll("docs", os.ModePerm); err != nil {
+		log.Fatal(err)
+	}
 	options, err := getOptions(files)
+	if err != nil {
+		log.Fatal(err)
+	}
 	indexHTML := ""
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".md") {
@@ -29,12 +39,18 @@ func main() {
 			text := processText(filename)
 			htmlFilename := file.Name()[:len(file.Name())-3] + ".html"
 			indexHTML += "<a class=\"text-blue-500 hover:underline\" href=\"" + htmlFilename + "\">" + title + "</a><br>"
-			ioutil.WriteFile("docs/"+htmlFilename, []byte(html), 0644)
-			ioutil.WriteFile("docs/hire-"+htmlFilename, []byte(text), 0644)
+			if err := ioutil.WriteFile("docs/"+htmlFilename, []byte(html), 0644); err != nil {
+				log.Fatal(err)
+			}
+			if err := ioutil.WriteFile("docs/hire-"+htmlFilename, []byte(text), 0644); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
-	ioutil.WriteFile("docs/index.html", []byte(createIndexPage(indexHTML)), 0644)
+	if err := ioutil.WriteFile("docs/index.html", []byte(createIndexPage(indexHTML)), 0644); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getOptions(files []os.FileInfo) (string, error) {
@@ -73,6 +89,7 @@ func tailwind(html []byte) []byte {
 	htmlString = strings.ReplaceAll(htmlString, "<h1>", `<h1 class="whitespace-no-wrap top-0 left-0 fixed w-full block opacity-90 bg-white p-2 px-8 border-b-2 text-lg mb-4"><img class="w-6 inline-block mr-3" src="seedling.png">`)
 	htmlString = strings.ReplaceAll(htmlString, "<h2>", `<h2 class="px-2 text-2xl mt-4">`)
 	htmlString = strings.ReplaceAll(htmlString, "<h3>", `<h3 class="px-2 text-xl mt-2">`)
+	htmlString = strings.ReplaceAll(htmlString, "<h4>", `<h4 class="px-2 text-l mt-2">`)
 	htmlString = strings.ReplaceAll(htmlString, "<p>", `<p style="width:50rem" class="px-2">`)
 	return []byte(htmlString)
 }
@@ -158,6 +175,7 @@ func googleHireify(html string) string {
 	html = strings.ReplaceAll(strings.ReplaceAll(html, "<h1>", "<strong>"), "</h1>", "</strong><br><br>")
 	html = strings.ReplaceAll(strings.ReplaceAll(html, "<h2>", "<strong>"), "</h2>", "</strong><br>")
 	html = strings.ReplaceAll(strings.ReplaceAll(html, "<h3>", "<strong>"), "</h3>", "</strong><br>")
+	html = strings.ReplaceAll(strings.ReplaceAll(html, "<h4>", "<br><strong>"), "</h4>", "</strong><br>")
 	html = strings.ReplaceAll(strings.ReplaceAll(html, "<b>", "<strong>"), "</b>", "</strong>")
 	html = strings.ReplaceAll(html, "</p>", "</p><br>")
 	// html = strings.ReplaceAll(html, ": level 2", "")
@@ -206,39 +224,40 @@ func processSnippets(text string) (string, error) {
 }
 
 func processInherits(text string, skipBase bool) (string, error) {
-
 	regex := regexp.MustCompile(`<inherit doc="([^"]+)"/>`)
 	match := regex.FindStringSubmatch(text)
 	if len(match) > 0 {
 		if match[1] == "base.md" && skipBase {
 			return strings.ReplaceAll(text, match[0], ""), nil
 		}
-		skillsGroups := []string{}
-		err := processInheritsWithGroups(match[1], skipBase, &skillsGroups)
+		skillSets := []skillSet{}
+		err := processInheritsWithGroups(match[1], skipBase, &skillSets)
 		if err != nil {
 			return "", err
 		}
-		text = strings.ReplaceAll(text, match[0], flatten(skillsGroups))
+		text = strings.ReplaceAll(text, match[0], flatten(skillSets))
 	}
 	return strings.TrimSpace(text), nil
 }
 
-func flatten(skillsGroups []string) string {
+func flatten(skillSets []skillSet) string {
 	result := ""
-	for _, skillGroup := range skillsGroups {
-		result += skillGroup + "\n"
+	for _, skillSet := range skillSets {
+		result += `<h4>` + skillSet.name + ` skills</h4>` + "\n\n"
+		result += skillSet.skills + "\n\n"
 	}
 	return strings.TrimSpace(result)
 }
 
-func processInheritsWithGroups(filename string, skipBase bool, skillsGroups *[]string) error {
+func processInheritsWithGroups(filename string, skipBase bool, skillSets *[]skillSet) error {
 	contents, err := ioutil.ReadFile("roles/" + filename)
 	if err != nil {
 		return err
 	}
 	text := string(contents)
+	title := getTitle(text)
 	skills := processSkills(text)
-	*skillsGroups = append(*skillsGroups, skills)
+	*skillSets = append(*skillSets, skillSet{title, skills})
 
 	regex := regexp.MustCompile(`<inherit doc="([^"]+)"/>`)
 	match := regex.FindStringSubmatch(text)
@@ -246,7 +265,7 @@ func processInheritsWithGroups(filename string, skipBase bool, skillsGroups *[]s
 		if match[1] == "base.md" && skipBase {
 			return nil
 		}
-		err = processInheritsWithGroups(match[1], skipBase, skillsGroups)
+		err = processInheritsWithGroups(match[1], skipBase, skillSets)
 		if err != nil {
 			return err
 		}
@@ -331,7 +350,7 @@ func getLevelFromName(name string) (string, string) {
 var competencies []string
 
 func createGroup(count string, group string) (string, error) {
-	group, _ = getLevelFromName(group)
+	group, level := getLevelFromName(group)
 
 	result := "<table class=\"group mt-4\"><tr><td valign=\"top\"><span class=\"group-heading text-sm pr-2 whitespace-no-wrap\">" + group + " (" + count + " of)" + "</span></td><td class=\"group\" valign=\"top\"> "
 	if len(competencies) == 0 {
@@ -346,6 +365,9 @@ func createGroup(count string, group string) (string, error) {
 	for _, competency := range competencies {
 		if strings.HasPrefix(competency, strings.ToLower(strings.ReplaceAll(group, " ", "-"))+"-") {
 			competency = competency[0 : len(competency)-3]
+			if level != "1" {
+				competency += ":" + level
+			}
 			link := createSkillLink(competency, false)
 			result += link
 		}
@@ -360,19 +382,10 @@ func makeLevel(level string) string {
 	return ": level " + level
 }
 
-func camel(group string, competency string) string {
-	competency = strings.ReplaceAll(competency, "-", " ")
-	competency = strings.TrimSpace(competency[len(group) : len(competency)-3])
-	return competency
-}
-
 func checkCompetency(file string) bool {
 	filename := "competencies/" + cleanFile(file)
 	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return true
+	return !os.IsNotExist(err)
 }
 
 func cleanFile(file string) string {
